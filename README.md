@@ -7,6 +7,9 @@ __index__
 * Externalized hostname
 * Spring RestTemplate
 * HTTP Clients
+* Externalize Properties
+* Spring Data JPA Repository
+* Bean Validation Implementation
 
 
 ## Externalized hostname
@@ -32,7 +35,6 @@ public class BreweryClient {
     public final String BEER_PATH_V1 = "api/v1/beer/";
 
     private String apihost;
-	...
 ~~~
 
 
@@ -248,6 +250,97 @@ logging.level.org.apache.http = debug
 ~~~
 
 
+## Externalize Properties
+
+## Spring Data JPA Repository
+
+Create interface `BeerRepository`. Extends `PagingAndSortingRepository<Beer, UUID>`. 
+
+Provide methods to retrieve entities using the pagination and sorting abstraction. In many cases this will be combined with CrudRepository or similar or with manually added methods to provide CRUD functionality.
+
+
+## Bean Validation Implementation
+
+dependencies:
+
+~~~Markup
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
+~~~
+
+libraries:
+
+~~~java
+import jakarta.validation.constraints.*
+~~~
+And see the external libraries:
+`jakarta.validation-api-3.0.2.jar`, the official bean valitation. And from Hibernate extensions`hibernate-validator-6.0.16.Final.jar` or `hibernate-validator-8.0.0.Final.jar`.
+
+
+### Validation Error Handling
+
+An exception handler is used to capture errors and return them to the client.
+
+Use `@ExceptionHandler(ConstraintViolationException.class)`.
+
+code:
+
+~~~java
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<List> validationErrorHandler(ConstraintViolationException exception) {
+        List<String> errors = new ArrayList<>(exception.getConstraintViolations().size());
+        exception.getConstraintViolations().forEach(
+                constraintViolation ->
+                errors.add(constraintViolation.getPropertyPath() + " : " + constraintViolation.getMessage()));
+        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+    }
+~~~
+
+### Spring Boot Method Validation
+
+Validation on methods like:
+
+~~~java
+public ResponseEntity handlePost(@Valid @NotNull @RequestBody BeerDtoV2 beerDto) {
+...
+~~~
+
+See `@Valid @NotNull`. 
+
+And `@Validated` at class definition:
+
+~~~java
+@Validated
+@RequestMapping("api/v2/beer")
+@RestController
+public class BeerControllerV2 {  ...
+~~~
+
+This validated annotation is going to perform validation on the method input parameters. 
+
+### Spring MVC Controller Advice
+
+At `mssc-beershop` project.
+
+Control advice to avoid code duplication of the `validationErrorHandler` method by advicing all controllers.
+
+So create a Handler annotated with `@Controlleradvice`:
+
+~~~java
+@ControllerAdvice
+public class MVCExceptionHandler { 
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<List> validationErrorHandler(    ...
+~~~
+
+all the errors that happen and that will get converted to Json and display it to the client. This is a standard Spring Framework error. So, what's gonna happen, this is gonna get thrown so when we try to do the @RequestBody to the BeerDto, the Spring is gonna go through a process called binding and if something goes wrong in that process it'll throw a BindException. 
+
+
+### Bean Validation
+
+At `mssc-beer-service` project ie when the Spring framework binds the request body to the Dto object the validation is activated at the save and update methods.
 
 ___
 
